@@ -7,8 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Trash, Edit, Plus, Eye } from 'lucide-react'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Trash, Edit } from 'lucide-react'
 
 interface Transcript {
     TranscriptText: string;
@@ -18,7 +17,7 @@ interface Transcript {
 interface Comment {
     CommentId: string;
     CommentText: string;
-    Location?: {
+    Location: {
         startIndex: number;
         endIndex: number;
     };
@@ -31,12 +30,12 @@ export default function TranscriptDetail({ transcriptId }: { transcriptId: strin
     const [error, setError] = useState<string | null>(null);
     const [summary, setSummary] = useState<string>('');
     const [commentText, setNewComment] = useState('');
-    const [selectedText, setSelectedText] = useState({ text: '', startIndex: 0, endIndex: 0 });
+    const [location, setLocation] = useState({ startIndex: 0, endIndex: 10 })
+
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingComment, setEditingComment] = useState<Comment | null>(null);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-    const [isHoverCardVisible, setIsHoverCardVisible] = useState(false);
 
     const fetchTranscript = useCallback(async () => {
         try {
@@ -99,93 +98,6 @@ export default function TranscriptDetail({ transcriptId }: { transcriptId: strin
         }
     }
 
-    const handleTextSelection = () => {
-        const selection = window.getSelection();
-        if (selection && selection.toString().length > 0) {
-            const range = selection.getRangeAt(0);
-            const startIndex = range.startOffset;
-            const endIndex = range.endOffset;
-            setSelectedText({
-                text: selection.toString(),
-                startIndex,
-                endIndex
-            });
-            setIsHoverCardVisible(true);
-        } else {
-            setIsHoverCardVisible(false);
-        }
-    };
-
-    const SelectionHoverCard = () => (
-        <HoverCard open={isHoverCardVisible} onOpenChange={setIsHoverCardVisible}>
-            <HoverCardTrigger asChild>
-                <span className="bg-yellow-200">
-                    {selectedText.text}
-                </span>
-            </HoverCardTrigger>
-            <HoverCardContent>
-                <p>{selectedText.text}</p>
-                <div className="flex mt-2">
-                    <Button variant="ghost" size="icon" onClick={() => {
-                        setIsDialogOpen(true);
-                        setIsHoverCardVisible(false);
-                    }}>
-                        <Plus size={16} />
-                    </Button>
-                </div>
-            </HoverCardContent>
-        </HoverCard>
-    );
-
-    const renderHighlightedText = () => {
-        if (!transcript) return null;
-
-        const text = transcript.TranscriptText;
-        const highlightedParts = [];
-        let lastIndex = 0;
-
-        comments.forEach((comment, index) => {
-            if (comment.Location && typeof comment.Location.startIndex === 'number' && typeof comment.Location.endIndex === 'number') {
-                highlightedParts.push(text.slice(lastIndex, comment.Location.startIndex));
-                highlightedParts.push(
-                    <HoverCard key={index}>
-                        <HoverCardTrigger asChild>
-                            <span className="bg-yellow-200">
-                                {text.slice(comment.Location.startIndex, comment.Location.endIndex)}
-                            </span>
-                        </HoverCardTrigger>
-                        <HoverCardContent>
-                            <p>{comment.CommentText}</p>
-                            <div className="flex mt-2">
-                                <Button variant="ghost" size="icon" onClick={() => handleEditComment(comment)}>
-                                    <Edit size={16} />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => deleteComment(transcriptId, comment.CommentId)}>
-                                    <Trash size={16} />
-                                </Button>
-                                <Button variant="ghost" size="icon">
-                                    <Eye size={16} />
-                                </Button>
-                            </div>
-                        </HoverCardContent>
-                    </HoverCard>
-                );
-                lastIndex = comment.Location.endIndex;
-            } else {
-                console.warn(`Comment with ID ${comment.CommentId} has invalid Location data`);
-            }
-        });
-
-        highlightedParts.push(text.slice(lastIndex));
-
-        return (
-            <>
-                {highlightedParts}
-                <SelectionHoverCard />
-            </>
-        );
-    };
-
     const handleSubmit = async () => {
         await fetch(`https://jo589y2zh7.execute-api.us-east-1.amazonaws.com/test/transcriptions/${transcriptId}/createComment`, {
             method: 'POST',
@@ -194,10 +106,7 @@ export default function TranscriptDetail({ transcriptId }: { transcriptId: strin
             },
             body: JSON.stringify({
                 commentText,
-                location: {
-                    startIndex: selectedText.startIndex,
-                    endIndex: selectedText.endIndex
-                }
+                location
             })
         })
             .then(response => response.json())
@@ -205,7 +114,6 @@ export default function TranscriptDetail({ transcriptId }: { transcriptId: strin
                 console.log('Comment created:', data);
                 setNewComment('');
                 setIsDialogOpen(false);
-                setSelectedText({ text: '', startIndex: 0, endIndex: 0 });
                 fetchComments();
             })
             .catch(error => console.error('Error creating comment:', error));
@@ -281,10 +189,10 @@ export default function TranscriptDetail({ transcriptId }: { transcriptId: strin
                 <TabsContent value="details">
                     <Card className="p-6 mb-6">
                         <p className="text-sm text-muted-foreground mb-2">
-                            <strong>Transcript ID:</strong> {transcript?.TranscriptId}
+                            <strong>Transcript ID:</strong> {transcript.TranscriptId}
                         </p>
-                        <div className="whitespace-pre-wrap" onMouseUp={handleTextSelection} onMouseDown={() => setIsHoverCardVisible(false)}>
-                            {renderHighlightedText()}
+                        <div className="whitespace-pre-wrap">
+                            {transcript.TranscriptText}
                         </div>
                     </Card>
                     <Button onClick={handleGenerateSummary} className="mt-4">Generate Summary</Button>
@@ -337,27 +245,6 @@ export default function TranscriptDetail({ transcriptId }: { transcriptId: strin
                             </div>
                         </Card>
                     ))}
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Add New Comment</DialogTitle>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="comment" className="text-right">
-                                        Comment
-                                    </Label>
-                                    <Textarea
-                                        id="comment"
-                                        value={commentText}
-                                        onChange={(e) => setNewComment(e.target.value)}
-                                        placeholder="Enter your comment"
-                                        className="col-span-3"
-                                    />
-                                </div>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
                     <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                         <DialogContent>
                             <DialogHeader>
@@ -384,7 +271,6 @@ export default function TranscriptDetail({ transcriptId }: { transcriptId: strin
                     </Dialog>
                 </TabsContent>
             </Tabs>
-
         </div>
     );
 }
